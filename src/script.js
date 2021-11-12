@@ -7,7 +7,7 @@ import * as dat from 'dat.gui'
 const gui = new dat.GUI()
 
 const params = {
-  gravity: 0.004
+  gravity: 0.42
 }
 
 gui.add(params, 'gravity', 0, 5, 0.001)
@@ -163,11 +163,12 @@ renderer.setClearColor(0xa1ffcb)
  * Animate
  */
 const clock = new THREE.Clock()
-const previousElapsedTime = 0
+let previousElapsedTime = 0
 
 const tick = () => {
   const elapsedTime = clock.getElapsedTime()
   const deltaTime = elapsedTime - previousElapsedTime
+  previousElapsedTime = elapsedTime
 
   // update points
   swordPoints.forEach(p => {
@@ -182,42 +183,46 @@ const tick = () => {
     p.previousPosition = positionBeforeUpdate.clone()
 
     p.mesh.position.copy(p.position)
-  }) 
+  })
 
   if (swordPoints.length > 0) {
-    for (let i = 0; i < 20; i++) {
-      const stickCentre = new THREE.Vector3().addVectors(swordPoints[0].position, swordPoints[1].position).divideScalar(2)
-      const stickDir = new THREE.Vector3().subVectors(swordPoints[0].position, swordPoints[1].position).normalize()
-      const length = new THREE.Vector3().subVectors(swordPoints[0].position, swordPoints[1].position).length()
-      if (length > swordStickLength) {
-        if (!swordPoints[0].locked) {
-          swordPoints[0].position.copy(new THREE.Vector3().addVectors(stickCentre, stickDir.multiplyScalar(swordStickLength).divideScalar(2)))
-        }
-        if (!swordPoints[1].locked) {
-          swordPoints[1].position.copy(new THREE.Vector3().subVectors(stickCentre, stickDir.multiplyScalar(swordStickLength).divideScalar(2)))
-        }
-      }
-      swordPoints.forEach(p => {
-        p.mesh.position.copy(p.position)
-      })
-      let swordRotation = Math.atan2(stickDir.y, stickDir.x)
-      if (swordRotation < 0) {
-        swordRotation += Math.PI * 2
-      }
-      sword.rotation.z = swordRotation - Math.PI / 2
+    for (let i = 0; i < 50; i++) {
+      const dist = new THREE.Vector3().subVectors(swordPoints[0].position, swordPoints[1].position).length()
+      const error = Math.abs(dist - swordStickLength)
 
-      if (stickCentre.x > camera.right || stickCentre.x < camera.left || stickCentre.y > camera.top || stickCentre.y < camera.bottom) {
-        console.log('locking')
-        swordPoints[0].physics = false
-        swordPoints[1].physics = false
-        swordPoints[0].locked = true
-        swordPoints[1].locked = true
+      const changeDir = new THREE.Vector3()
+      if (dist > swordStickLength) {
+        changeDir.subVectors(swordPoints[0].position, swordPoints[1].position).normalize()
+      } else if (dist < swordStickLength) {
+        changeDir.subVectors(swordPoints[1].position, swordPoints[0].position).normalize()
       }
+
+      const changeAmount = changeDir.clone().multiplyScalar(error)
+      swordPoints[1].position.add(changeAmount)
     }
-    
-    if (swordPoints[0]) {
-      sword.position.copy(swordPoints[0].position)
+    swordPoints.forEach(p => {
+      p.mesh.position.copy(p.position)
+    })
+    const stickCentre = new THREE.Vector3().addVectors(swordPoints[0].position, swordPoints[1].position).divideScalar(2)
+    const stickDir = new THREE.Vector3().subVectors(swordPoints[0].position, swordPoints[1].position).normalize()
+    let swordRotation = Math.atan2(stickDir.y, stickDir.x)
+    if (swordRotation < 0) {
+      swordRotation += Math.PI * 2
     }
+    sword.rotation.z = swordRotation - Math.PI / 2
+
+    if (stickCentre.x > camera.right || stickCentre.x < camera.left || stickCentre.y > camera.top || stickCentre.y < camera.bottom) {
+      swordPoints[0].physics = false
+      swordPoints[1].physics = false
+      swordPoints[0].locked = true
+      swordPoints[1].locked = true
+    }
+
+    console.log(swordPoints[1].position)
+  }
+
+  if (swordPoints[0]) {
+    sword.position.copy(swordPoints[0].position)
   }
 
   // Render
